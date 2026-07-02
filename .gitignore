@@ -1,0 +1,12 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.log
+.idea/
+*.iml
+.vscode/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.jqwik-database

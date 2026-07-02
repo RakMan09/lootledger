@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: lootledger
+  datasource:
+    url: ${LOOTLEDGER_DB_URL:jdbc:postgresql://localhost:5432/lootledger}
+    username: ${LOOTLEDGER_DB_USER:lootledger}
+    password: ${LOOTLEDGER_DB_PASSWORD:lootledger}
+    hikari:
+      maximum-pool-size: 20
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${LOOTLEDGER_REDIS_HOST:localhost}
+      port: ${LOOTLEDGER_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${LOOTLEDGER_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: lootledger-loot-consumer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: manual
+
+lootledger:
+  topics:
+    loot: loot-events
+    economy: economy-events
+  outbox:
+    relay-interval-ms: 1000
+    batch-size: 200
+  reconciliation:
+    interval-ms: 30000
+  loot-generator:
+    enabled: false
+    interval-ms: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.lootledger: INFO
