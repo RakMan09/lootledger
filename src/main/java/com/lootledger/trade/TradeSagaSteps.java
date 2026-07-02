@@ -158,7 +158,7 @@ public class TradeSagaSteps {
         }
     }
 
-    static UUID stepId(UUID base, String step) {
+    public static UUID stepId(UUID base, String step) {
         return UUID.nameUUIDFromBytes((base.toString() + ":" + step).getBytes(StandardCharsets.UTF_8));
     }
 }
