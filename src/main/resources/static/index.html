@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LootLedger — dupe-proof game economy</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2431;
+    --border: #2b3444;
+    --text: #e6edf3;
+    --muted: #9aa7b4;
+    --gold: #f5c518;
+    --green: #2ea043;
+    --green-2: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --accent: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2536 0%, var(--bg) 60%);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    text-align: center;
+    padding: 40px 20px 10px;
+  }
+  header h1 { margin: 0; font-size: 2.2rem; letter-spacing: -0.5px; }
+  header h1 .coin { color: var(--gold); }
+  header p { color: var(--muted); max-width: 640px; margin: 10px auto 0; }
+  .links { margin-top: 14px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+  .links a { color: var(--blue); text-decoration: none; font-size: 0.9rem; border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; }
+  .links a:hover { background: var(--panel-2); }
+  main { max-width: 980px; margin: 24px auto 60px; padding: 0 18px; display: grid; gap: 20px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .card h2 { margin: 0 0 4px; font-size: 1.2rem; }
+  .card .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 16px; }
+  .hero { border-color: #3a2d5c; background: linear-gradient(180deg, #1b1533 0%, var(--panel) 100%); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  label { font-size: 0.85rem; color: var(--muted); display: block; margin-bottom: 4px; }
+  input {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 11px; border-radius: 8px; width: 130px; font-size: 0.95rem;
+  }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600;
+  }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: linear-gradient(180deg, var(--accent), #7d4fd1); border-color: #7d4fd1; color: #fff; }
+  button.gold { background: linear-gradient(180deg, #f5c518, #d9a900); border-color: #d9a900; color: #201a00; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .verdict { margin-top: 18px; padding: 16px; border-radius: 10px; font-size: 1.05rem; display: none; }
+  .verdict.pass { display: block; background: rgba(46,160,67,0.12); border: 1px solid var(--green); }
+  .verdict.fail { display: block; background: rgba(248,81,73,0.12); border: 1px solid var(--red); }
+  .verdict.info { display: block; background: rgba(88,166,255,0.10); border: 1px solid var(--blue); }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .num { font-size: 1.6rem; font-weight: 700; }
+  .stat .lbl { color: var(--muted); font-size: 0.8rem; }
+  .num.good { color: var(--green-2); }
+  .num.gold { color: var(--gold); }
+  pre { background: #0b0f14; border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow: auto; font-size: 0.85rem; color: #c9d1d9; margin: 0; }
+  .log { max-height: 220px; }
+  .balances { display: grid; gap: 8px; margin-top: 12px; }
+  .bal-row { display: flex; justify-content: space-between; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.95rem; }
+  .bal-row .asset { color: var(--muted); }
+  .footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 10px; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="coin">◈</span> LootLedger</h1>
+  <p>A dupe-proof, double-entry game economy. Gold and items can never be duplicated or lost —
+     no matter how clients retry, disconnect, or double-click. Try to break it below.</p>
+  <div class="links">
+    <a href="/swagger-ui.html" target="_blank">API docs (Swagger)</a>
+    <a href="/admin/reconciliation" target="_blank">Live invariant check</a>
+    <a href="https://github.com/RakMan09/lootledger" target="_blank">Source on GitHub</a>
+  </div>
+</header>
+
+<main>
+  <!-- The signature demo -->
+  <section class="card hero">
+    <h2>🔨 Try to dupe the economy</h2>
+    <div class="sub">
+      Fire many <em>identical</em> transfer requests at the exact same moment, all sharing one
+      Idempotency-Key — exactly what a laggy client or a double-click attack does. A naive system
+      would apply them all and duplicate gold. LootLedger applies it <strong>exactly once</strong>.
+    </div>
+    <div class="row">
+      <div>
+        <label for="dupeCount">Duplicate requests</label>
+        <input id="dupeCount" type="number" value="50" min="2" max="500" />
+      </div>
+      <div>
+        <label for="dupeAmount">Gold to transfer</label>
+        <input id="dupeAmount" type="number" value="100" min="1" />
+      </div>
+      <div style="align-self: flex-end;">
+        <button id="dupeBtn" class="primary" onclick="runDupeStorm()">Launch duplicate storm</button>
+      </div>
+    </div>
+    <div id="dupeVerdict" class="verdict"></div>
+    <div class="stat-grid" id="dupeStats" style="display:none;">
+      <div class="stat"><div class="num" id="statSent">0</div><div class="lbl">Requests sent</div></div>
+      <div class="stat"><div class="num good" id="statFresh">0</div><div class="lbl">Actually executed</div></div>
+      <div class="stat"><div class="num" id="statReplay">0</div><div class="lbl">Replayed (deduped)</div></div>
+      <div class="stat"><div class="num gold" id="statMoved">0</div><div class="lbl">Gold moved</div></div>
+    </div>
+    <pre class="log" id="dupeLog" style="display:none; margin-top:14px;"></pre>
+  </section>
+
+  <!-- Playground -->
+  <section class="card">
+    <h2>🎮 Playground</h2>
+    <div class="sub">Mint gold from the faucet, transfer between players, and inspect balances.</div>
+    <div class="row" style="margin-bottom:14px;">
+      <div>
+        <label for="mintOwner">Player id</label>
+        <input id="mintOwner" type="number" value="1" />
+      </div>
+      <div>
+        <label for="mintAmount">Amount</label>
+        <input id="mintAmount" type="number" value="1000" />
+      </div>
+      <div style="align-self:flex-end;">
+        <button class="gold" onclick="mint()">Mint gold</button>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="txFrom">From</label>
+        <input id="txFrom" type="number" value="1" />
+      </div>
+      <div>
+        <label for="txTo">To</label>
+        <input id="txTo" type="number" value="2" />
+      </div>
+      <div>
+        <label for="txAmount">Amount</label>
+        <input id="txAmount" type="number" value="250" />
+      </div>
+      <div style="align-self:flex-end;">
+        <button onclick="transfer()">Transfer</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <div>
+        <label for="lookupOwner">Look up player</label>
+        <input id="lookupOwner" type="number" value="1" />
+      </div>
+      <div style="align-self:flex-end;">
+        <button onclick="lookup()">View balances</button>
+      </div>
+    </div>
+    <div class="balances" id="balances"></div>
+  </section>
+
+  <!-- Auditor -->
+  <section class="card">
+    <h2>🧮 The auditor</h2>
+    <div class="sub">
+      A reconciliation job recomputes every balance from the immutable ledger and asserts the four
+      invariants (balanced postings, cache matches ledger, no negative balances, conservation of value).
+    </div>
+    <button onclick="reconcile()">Run invariant check now</button>
+    <div id="reconVerdict" class="verdict"></div>
+  </section>
+</main>
+
+<div class="footer">LootLedger · double-entry · idempotent · exactly-once · reconciled</div>
+
+<script>
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      }));
+
+  async function post(path, body, key) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify(body),
+    });
+    const replayed = res.headers.get('Idempotent-Replayed');
+    let json = null;
+    try { json = await res.json(); } catch (e) {}
+    return { status: res.status, replayed, json };
+  }
+
+  async function goldBalance(owner) {
+    const res = await fetch('/accounts/' + owner + '/balances');
+    const data = await res.json();
+    const g = (data.balances || []).find(b => b.asset === 'GOLD');
+    return g ? g.balance : 0;
+  }
+
+  async function runDupeStorm() {
+    const btn = document.getElementById('dupeBtn');
+    const n = Math.max(2, Math.min(500, parseInt(document.getElementById('dupeCount').value) || 50));
+    const amount = Math.max(1, parseInt(document.getElementById('dupeAmount').value) || 100);
+    const verdict = document.getElementById('dupeVerdict');
+    const log = document.getElementById('dupeLog');
+    btn.disabled = true;
+    verdict.className = 'verdict info';
+    verdict.textContent = 'Setting up fresh players and firing ' + n + ' identical requests…';
+    log.style.display = 'block';
+    log.textContent = '';
+
+    try {
+      // Fresh players each run so the demo is self-contained.
+      const sender = 100000 + Math.floor(Math.random() * 800000);
+      const receiver = sender + 1;
+      await post('/admin/mint', { toOwnerId: sender, asset: 'GOLD', amount: amount * 2 }, 'seed-' + uuid());
+
+      const before = await goldBalance(receiver);
+      const key = 'dupe-' + uuid(); // ONE key shared by every request
+      const body = { fromOwnerId: sender, toOwnerId: receiver, asset: 'GOLD', amount };
+
+      // Fire them all at once.
+      const results = await Promise.all(
+        Array.from({ length: n }, () => post('/transfers', body, key).catch(e => ({ status: 0, replayed: null })))
+      );
+
+      const after = await goldBalance(receiver);
+      const moved = after - before;
+      const ok2xx = results.filter(r => r.status >= 200 && r.status < 300).length;
+      const fresh = results.filter(r => r.replayed === 'false').length;
+      const replay = results.filter(r => r.replayed === 'true').length;
+
+      document.getElementById('dupeStats').style.display = 'grid';
+      document.getElementById('statSent').textContent = n;
+      document.getElementById('statFresh').textContent = fresh;
+      document.getElementById('statReplay').textContent = replay;
+      document.getElementById('statMoved').textContent = moved;
+
+      log.textContent =
+        'sender=' + sender + '  receiver=' + receiver + '\n' +
+        'shared Idempotency-Key = ' + key + '\n' +
+        'HTTP 2xx responses: ' + ok2xx + '/' + n + '\n' +
+        'receiver gold before=' + before + '  after=' + after + '  delta=' + moved;
+
+      const passed = fresh === 1 && moved === amount;
+      verdict.className = 'verdict ' + (passed ? 'pass' : 'fail');
+      verdict.innerHTML = passed
+        ? '✅ <strong>No dupe.</strong> ' + n + ' identical requests, but the transfer executed '
+          + '<strong>exactly once</strong> — the receiver gained exactly ' + amount
+          + ' gold. The other ' + (n - 1) + ' were deduplicated and replayed the same response.'
+        : '❌ Unexpected result: ' + fresh + ' executions moved ' + moved + ' gold (expected 1 execution moving ' + amount + ').';
+    } catch (e) {
+      verdict.className = 'verdict fail';
+      verdict.textContent = 'Error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function mint() {
+    const owner = parseInt(document.getElementById('mintOwner').value);
+    const amount = parseInt(document.getElementById('mintAmount').value);
+    await post('/admin/mint', { toOwnerId: owner, asset: 'GOLD', amount }, 'mint-' + uuid());
+    document.getElementById('lookupOwner').value = owner;
+    lookup();
+  }
+
+  async function transfer() {
+    const from = parseInt(document.getElementById('txFrom').value);
+    const to = parseInt(document.getElementById('txTo').value);
+    const amount = parseInt(document.getElementById('txAmount').value);
+    const r = await post('/transfers', { fromOwnerId: from, toOwnerId: to, asset: 'GOLD', amount }, 'tx-' + uuid());
+    document.getElementById('lookupOwner').value = from;
+    lookup();
+    if (r.status >= 400) alert('Transfer rejected (' + r.status + '): ' + JSON.stringify(r.json));
+  }
+
+  async function lookup() {
+    const owner = parseInt(document.getElementById('lookupOwner').value);
+    const res = await fetch('/accounts/' + owner + '/balances');
+    const data = await res.json();
+    const el = document.getElementById('balances');
+    const list = data.balances || [];
+    el.innerHTML = list.length
+      ? list.map(b => '<div class="bal-row"><span>Player ' + owner + '</span>'
+          + '<span><span class="asset">' + b.asset + '</span> &nbsp; <strong>' + b.balance + '</strong></span></div>').join('')
+      : '<div class="bal-row"><span>Player ' + owner + '</span><span class="asset">no balances yet</span></div>';
+  }
+
+  async function reconcile() {
+    const v = document.getElementById('reconVerdict');
+    v.className = 'verdict info';
+    v.textContent = 'Recomputing balances from the ledger…';
+    try {
+      const res = await fetch('/admin/reconciliation');
+      const data = await res.json();
+      if (data.ok) {
+        v.className = 'verdict pass';
+        v.innerHTML = '✅ <strong>All invariants hold.</strong> Value is conserved; the balance cache matches the ledger; no illegal negatives.';
+      } else {
+        v.className = 'verdict fail';
+        v.innerHTML = '❌ Drift detected: <pre>' + JSON.stringify(data.violations, null, 2) + '</pre>';
+      }
+    } catch (e) {
+      v.className = 'verdict fail';
+      v.textContent = 'Error: ' + e.message;
+    }
+  }
+
+  // Prime the playground view.
+  lookup();
+</script>
+</body>
+</html>
