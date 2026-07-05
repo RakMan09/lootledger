@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LootLedger — a dupe-proof game economy (live demo)</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2431; --border: #2b3444;
+    --text: #e6edf3; --muted: #9aa7b4; --gold: #f5c518; --green: #2ea043;
+    --green-2: #3fb950; --red: #f85149; --blue: #58a6ff; --accent: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2536 0%, var(--bg) 60%);
+    color: var(--text); line-height: 1.55;
+  }
+  a { color: var(--blue); }
+  header { text-align: center; padding: 44px 20px 6px; }
+  header h1 { margin: 0; font-size: 2.3rem; letter-spacing: -0.5px; }
+  header h1 .coin { color: var(--gold); }
+  header p.tag { color: var(--muted); max-width: 680px; margin: 12px auto 0; font-size: 1.05rem; }
+  .badges { margin-top: 16px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .badges a { text-decoration: none; }
+  .pill { color: var(--text); font-size: 0.82rem; border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; background: var(--panel-2); }
+  main { max-width: 1000px; margin: 22px auto 60px; padding: 0 18px; display: grid; gap: 20px; }
+  .banner {
+    background: rgba(245,197,24,0.08); border: 1px solid #6b5a12; border-radius: 12px;
+    padding: 14px 18px; color: #f0d98c; font-size: 0.92rem;
+  }
+  .banner strong { color: var(--gold); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .card h2 { margin: 0 0 4px; font-size: 1.2rem; }
+  .card .sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 16px; }
+  .hero { border-color: #3a2d5c; background: linear-gradient(180deg, #1b1533 0%, var(--panel) 100%); }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  label { font-size: 0.82rem; color: var(--muted); display: block; margin-bottom: 4px; }
+  input { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 9px 11px; border-radius: 8px; width: 130px; font-size: 0.95rem; }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 0.95rem; font-weight: 600; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: linear-gradient(180deg, var(--accent), #7d4fd1); border-color: #7d4fd1; color: #fff; }
+  button.gold { background: linear-gradient(180deg, #f5c518, #d9a900); border-color: #d9a900; color: #201a00; }
+  .verdict { margin-top: 18px; padding: 16px; border-radius: 10px; font-size: 1.05rem; display: none; }
+  .verdict.pass { display: block; background: rgba(46,160,67,0.12); border: 1px solid var(--green); }
+  .verdict.fail { display: block; background: rgba(248,81,73,0.12); border: 1px solid var(--red); }
+  .verdict.info { display: block; background: rgba(88,166,255,0.10); border: 1px solid var(--blue); }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 14px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .num { font-size: 1.6rem; font-weight: 700; }
+  .stat .lbl { color: var(--muted); font-size: 0.8rem; }
+  .num.good { color: var(--green-2); } .num.gold { color: var(--gold); }
+  pre { background: #0b0f14; border: 1px solid var(--border); border-radius: 10px; padding: 14px; overflow: auto; font-size: 0.84rem; color: #c9d1d9; margin: 0; }
+  .log { max-height: 220px; }
+  .balances { display: grid; gap: 8px; margin-top: 12px; }
+  .bal-row { display: flex; justify-content: space-between; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.95rem; }
+  .bal-row .asset { color: var(--muted); }
+  ul.plain { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 0.95rem; }
+  ul.plain li { margin-bottom: 6px; }
+  ul.plain code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; color: var(--text); }
+  .mermaid { background: #0b0f14; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+  .footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 10px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="coin">◈</span> LootLedger</h1>
+  <p class="tag">A dupe-proof, double-entry game economy. Gold and items can never be duplicated or
+     lost — no matter how clients retry, disconnect, or double-click. Try to break it below.</p>
+  <div class="badges">
+    <a href="https://github.com/RakMan09/lootledger/actions/workflows/ci.yml" target="_blank" rel="noopener">
+      <img alt="CI status" src="https://github.com/RakMan09/lootledger/actions/workflows/ci.yml/badge.svg" /></a>
+    <a href="https://github.com/RakMan09/lootledger" target="_blank" rel="noopener"><span class="pill">Source on GitHub</span></a>
+    <a href="https://github.com/RakMan09/lootledger/blob/main/DEPLOY.md" target="_blank" rel="noopener"><span class="pill">Run the real backend</span></a>
+  </div>
+</header>
+
+<main>
+  <div class="banner">
+    <strong>About this page:</strong> this runs <strong>entirely in your browser</strong> — a faithful
+    JavaScript simulation of LootLedger's real double-entry ledger and idempotency logic, so you can
+    play with it instantly, no server needed. The <em>actual</em> system is Java + Spring Boot + PostgreSQL,
+    and its correctness is proven by an automated attack suite that runs on real infrastructure in CI
+    (green badge above) — see
+    <a href="https://github.com/RakMan09/lootledger#see-it-work--prove-it">how it's proven</a>.
+  </div>
+
+  <!-- The signature demo -->
+  <section class="card hero">
+    <h2>🔨 Try to dupe the economy</h2>
+    <div class="sub">
+      Fire many <em>identical</em> transfer requests that all share one Idempotency-Key — exactly what a
+      laggy client or a double-click attack does. A naive system applies them all and duplicates gold.
+      LootLedger applies it <strong>exactly once</strong> and replays the same response to the rest.
+    </div>
+    <div class="row">
+      <div><label for="dupeCount">Duplicate requests</label><input id="dupeCount" type="number" value="200" min="2" max="5000" /></div>
+      <div><label for="dupeAmount">Gold to transfer</label><input id="dupeAmount" type="number" value="100" min="1" /></div>
+      <div><button class="primary" onclick="runDupeStorm()">Launch duplicate storm</button></div>
+    </div>
+    <div id="dupeVerdict" class="verdict"></div>
+    <div class="stat-grid" id="dupeStats" style="display:none;">
+      <div class="stat"><div class="num" id="statSent">0</div><div class="lbl">Requests sent</div></div>
+      <div class="stat"><div class="num good" id="statFresh">0</div><div class="lbl">Actually executed</div></div>
+      <div class="stat"><div class="num" id="statReplay">0</div><div class="lbl">Replayed (deduped)</div></div>
+      <div class="stat"><div class="num gold" id="statMoved">0</div><div class="lbl">Gold moved</div></div>
+    </div>
+    <pre class="log" id="dupeLog" style="display:none; margin-top:14px;"></pre>
+  </section>
+
+  <div class="cols">
+    <!-- Playground -->
+    <section class="card">
+      <h2>🎮 Playground</h2>
+      <div class="sub">Mint gold from the faucet, transfer between players, inspect balances.</div>
+      <div class="row" style="margin-bottom:12px;">
+        <div><label for="mintOwner">Player</label><input id="mintOwner" type="number" value="1" /></div>
+        <div><label for="mintAmount">Amount</label><input id="mintAmount" type="number" value="1000" /></div>
+        <div><button class="gold" onclick="mint()">Mint gold</button></div>
+      </div>
+      <div class="row">
+        <div><label for="txFrom">From</label><input id="txFrom" type="number" value="1" style="width:90px;" /></div>
+        <div><label for="txTo">To</label><input id="txTo" type="number" value="2" style="width:90px;" /></div>
+        <div><label for="txAmount">Amount</label><input id="txAmount" type="number" value="250" style="width:90px;" /></div>
+        <div><button onclick="transfer()">Transfer</button></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <div><label for="lookupOwner">Look up player</label><input id="lookupOwner" type="number" value="1" /></div>
+        <div><button onclick="lookup()">View balances</button></div>
+      </div>
+      <div class="balances" id="balances"></div>
+    </section>
+
+    <!-- Auditor -->
+    <section class="card">
+      <h2>🧮 The auditor</h2>
+      <div class="sub">
+        Recomputes every balance from the immutable posting log and asserts the four invariants:
+        balanced postings, cache matches ledger, no illegal negatives, and conservation of value.
+      </div>
+      <button onclick="reconcile()">Run invariant check</button>
+      <div id="reconVerdict" class="verdict"></div>
+      <div class="sub" style="margin-top:14px;">Simulation totals</div>
+      <div class="balances" id="totals"></div>
+    </section>
+  </div>
+
+  <!-- How it works -->
+  <section class="card">
+    <h2>🛡️ Why it can't dupe</h2>
+    <ul class="plain">
+      <li><strong>Double-entry ledger.</strong> Value never appears; every change writes balanced
+        postings that sum to zero, so gold can't be created or destroyed by accident.</li>
+      <li><strong>Idempotency keys.</strong> Each request carries a unique key; the first execution is
+        recorded and every duplicate replays the same stored response. In the real system a Postgres
+        <code>UNIQUE</code> constraint makes this atomic and race-proof.</li>
+      <li><strong>Trades are a saga.</strong> Escrow each side → cross → complete, each step idempotent;
+        a crash resumes to completion or fully compensates — value is never stranded.</li>
+      <li><strong>Exactly-once loot.</strong> Kafka events are keyed by loot id, so redelivery is a no-op.</li>
+      <li><strong>Reconciliation.</strong> A scheduled job re-proves conservation and flags any drift.</li>
+    </ul>
+  </section>
+
+  <!-- Architecture -->
+  <section class="card">
+    <h2>🏗️ Architecture</h2>
+    <div class="sub">The real system (this page simulates the API + ledger + idempotency layers).</div>
+    <pre class="mermaid">
+flowchart TD
+  Client["Player client / chaos tester"] -->|REST + Idempotency-Key| API["Economy API — Spring Boot"]
+  API --> Idem["Idempotency layer — Redis + Postgres"]
+  API --> Ledger["Ledger service — double-entry"]
+  Ledger --> DB[("PostgreSQL")]
+  API --> Outbox["Outbox table — same txn"]
+  Outbox --> Relay["Outbox relay"]
+  Relay --> Kafka[("Kafka")]
+  Kafka --> Consumer["Exactly-once consumers"]
+  Consumer --> Ledger
+  Recon["Reconciliation job"] --> DB
+    </pre>
+  </section>
+</main>
+
+<div class="footer">
+  LootLedger · double-entry · idempotent · exactly-once · reconciled ·
+  <a href="https://github.com/RakMan09/lootledger" target="_blank" rel="noopener">github.com/RakMan09/lootledger</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+  if (window.mermaid) { mermaid.initialize({ startOnLoad: true, theme: 'dark' }); }
+
+  // ----- In-browser simulation of the real ledger + idempotency logic -----
+  const accounts = new Map();   // "owner:asset" -> { balance, kind }
+  const idem = new Map();       // idempotency key -> { hash, response }
+  const postings = [];          // immutable log of { acct, asset, amount }
+
+  const akey = (owner, asset) => owner + ':' + asset;
+  const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
+  const hash = (obj) => JSON.stringify(obj, Object.keys(obj).sort());
+
+  function ensureAccount(owner, asset, kind) {
+    const k = akey(owner, asset);
+    if (!accounts.has(k)) accounts.set(k, { balance: 0, kind });
+    return accounts.get(k);
+  }
+  function balanceOf(owner, asset) {
+    const a = accounts.get(akey(owner, asset));
+    return a ? a.balance : 0;
+  }
+  // Apply balanced postings (mirrors the double-entry ledger); only faucet may go negative.
+  function applyPostings(lines) {
+    for (const [owner, asset, amount, kind] of lines) {
+      const acct = ensureAccount(owner, asset, kind);
+      const next = acct.balance + amount;
+      if (next < 0 && acct.kind !== 'FAUCET') {
+        const e = new Error('INSUFFICIENT_FUNDS'); e.code = 'INSUFFICIENT_FUNDS'; throw e;
+      }
+    }
+    // Two-phase: validate all, then commit all, so a rejected leg leaves nothing applied.
+    for (const [owner, asset, amount] of lines) {
+      accounts.get(akey(owner, asset)).balance += amount;
+      postings.push({ acct: akey(owner, asset), asset, amount });
+    }
+  }
+
+  // Idempotent wrapper: at-most-once execution, replay stored response on duplicates.
+  function idempotent(key, body, execFn) {
+    const h = hash(body);
+    const existing = idem.get(key);
+    if (existing) {
+      if (existing.hash !== h) return { status: 422, replayed: true, error: 'IDEMPOTENCY_KEY_REUSED' };
+      return Object.assign({}, existing.response, { replayed: true });
+    }
+    let res;
+    try {
+      res = execFn();
+    } catch (e) {
+      // Deterministic rejection: not stored, so it stays retryable (mirrors the real rollback).
+      return { status: 422, replayed: false, error: e.code || e.message };
+    }
+    idem.set(key, { hash: h, response: res });
+    return Object.assign({}, res, { replayed: false });
+  }
+
+  function mintOp(key, to, asset, amount) {
+    return idempotent(key, { op: 'mint', to, asset, amount }, () => {
+      ensureAccount(0, asset, 'FAUCET');
+      ensureAccount(to, asset, 'PLAYER');
+      applyPostings([[0, asset, -amount, 'FAUCET'], [to, asset, amount, 'PLAYER']]);
+      return { status: 201 };
+    });
+  }
+  function transferOp(key, from, to, asset, amount) {
+    return idempotent(key, { op: 'transfer', from, to, asset, amount }, () => {
+      ensureAccount(from, asset, 'PLAYER');
+      ensureAccount(to, asset, 'PLAYER');
+      applyPostings([[from, asset, -amount, 'PLAYER'], [to, asset, amount, 'PLAYER']]);
+      return { status: 201 };
+    });
+  }
+
+  // ----- UI wiring -----
+  async function runDupeStorm() {
+    const n = Math.max(2, Math.min(5000, parseInt(document.getElementById('dupeCount').value) || 200));
+    const amount = Math.max(1, parseInt(document.getElementById('dupeAmount').value) || 100);
+    const verdict = document.getElementById('dupeVerdict');
+    const log = document.getElementById('dupeLog');
+
+    const sender = 100000 + Math.floor(Math.random() * 800000);
+    const receiver = sender + 1;
+    mintOp('seed-' + uuid(), sender, 'GOLD', amount * 2);
+    const before = balanceOf(receiver, 'GOLD');
+
+    const key = 'dupe-' + uuid();
+    const body = { op: 'transfer', from: sender, to: receiver, asset: 'GOLD', amount };
+    let fresh = 0, replay = 0, ok = 0;
+    for (let i = 0; i < n; i++) {
+      const r = transferOp(key, sender, receiver, 'GOLD', amount);
+      if (r.status >= 200 && r.status < 300) ok++;
+      if (r.replayed) replay++; else if (r.status < 300) fresh++;
+    }
+    const after = balanceOf(receiver, 'GOLD');
+    const moved = after - before;
+
+    document.getElementById('dupeStats').style.display = 'grid';
+    document.getElementById('statSent').textContent = n;
+    document.getElementById('statFresh').textContent = fresh;
+    document.getElementById('statReplay').textContent = replay;
+    document.getElementById('statMoved').textContent = moved;
+    log.style.display = 'block';
+    log.textContent =
+      'sender=' + sender + '  receiver=' + receiver + '\n' +
+      'shared Idempotency-Key = ' + key + '\n' +
+      'HTTP 2xx responses: ' + ok + '/' + n + '\n' +
+      'receiver gold before=' + before + '  after=' + after + '  delta=' + moved;
+
+    const passed = fresh === 1 && moved === amount;
+    verdict.className = 'verdict ' + (passed ? 'pass' : 'fail');
+    verdict.innerHTML = passed
+      ? '✅ <strong>No dupe.</strong> ' + n + ' identical requests, but the transfer executed '
+        + '<strong>exactly once</strong> — the receiver gained exactly ' + amount + ' gold. The other '
+        + (n - 1) + ' were deduplicated and replayed the same response.'
+      : '❌ Unexpected: ' + fresh + ' executions moved ' + moved + ' gold.';
+    lookup();
+    renderTotals();
+  }
+
+  function mint() {
+    mintOp('mint-' + uuid(), +document.getElementById('mintOwner').value,
+      'GOLD', +document.getElementById('mintAmount').value);
+    document.getElementById('lookupOwner').value = document.getElementById('mintOwner').value;
+    lookup(); renderTotals();
+  }
+  function transfer() {
+    const from = +document.getElementById('txFrom').value;
+    const r = transferOp('tx-' + uuid(), from, +document.getElementById('txTo').value,
+      'GOLD', +document.getElementById('txAmount').value);
+    document.getElementById('lookupOwner').value = from;
+    lookup(); renderTotals();
+    if (r.status >= 400) alert('Transfer rejected: ' + r.error);
+  }
+  function lookup() {
+    const owner = +document.getElementById('lookupOwner').value;
+    const el = document.getElementById('balances');
+    const rows = [];
+    for (const [k, acct] of accounts) {
+      const [o, asset] = k.split(':');
+      if (+o === owner) rows.push('<div class="bal-row"><span>Player ' + owner + '</span><span><span class="asset">'
+        + asset + '</span> &nbsp; <strong>' + acct.balance + '</strong></span></div>');
+    }
+    el.innerHTML = rows.length ? rows.join('')
+      : '<div class="bal-row"><span>Player ' + owner + '</span><span class="asset">no balances yet</span></div>';
+  }
+  function renderTotals() {
+    const totals = {};
+    for (const [k, acct] of accounts) { const a = k.split(':')[1]; totals[a] = (totals[a] || 0) + acct.balance; }
+    const el = document.getElementById('totals');
+    const rows = Object.entries(totals).map(([a, t]) =>
+      '<div class="bal-row"><span class="asset">' + a + ' (all accounts)</span><strong>' + t + '</strong></div>');
+    el.innerHTML = rows.length ? rows.join('') : '<div class="bal-row"><span class="asset">no activity yet</span></div>';
+  }
+  function reconcile() {
+    const v = document.getElementById('reconVerdict');
+    const rep = (function () {
+      const derived = new Map();
+      for (const p of postings) derived.set(p.acct, (derived.get(p.acct) || 0) + p.amount);
+      const violations = [];
+      const totalsPerAsset = {};
+      for (const [k, acct] of accounts) {
+        const d = derived.get(k) || 0;
+        if (d !== acct.balance) violations.push({ invariant: 'CACHE_MATCHES_LEDGER', account: k });
+        if (acct.balance < 0 && acct.kind !== 'FAUCET') violations.push({ invariant: 'NO_NEGATIVE_BALANCE', account: k });
+        const asset = k.split(':')[1];
+        totalsPerAsset[asset] = (totalsPerAsset[asset] || 0) + acct.balance;
+      }
+      for (const [asset, total] of Object.entries(totalsPerAsset))
+        if (total !== 0) violations.push({ invariant: 'CONSERVATION', asset, total });
+      return { ok: violations.length === 0, violations };
+    })();
+    if (rep.ok) {
+      v.className = 'verdict pass';
+      v.innerHTML = '✅ <strong>All invariants hold.</strong> Value is conserved; the balance cache matches the posting log; no illegal negatives.';
+    } else {
+      v.className = 'verdict fail';
+      v.innerHTML = '❌ Drift detected: <pre>' + JSON.stringify(rep.violations, null, 2) + '</pre>';
+    }
+  }
+
+  lookup();
+  renderTotals();
+</script>
+</body>
+</html>
