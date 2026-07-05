@@ -8,6 +8,8 @@ import java.util.HexFormat;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,11 +37,17 @@ public class IdempotencyService {
     private final JdbcTemplate jdbc;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
+    private final boolean redisEnabled;
 
-    public IdempotencyService(JdbcTemplate jdbc, StringRedisTemplate redis, ObjectMapper objectMapper) {
+    public IdempotencyService(
+            JdbcTemplate jdbc,
+            ObjectProvider<StringRedisTemplate> redisProvider,
+            ObjectMapper objectMapper,
+            @Value("${lootledger.redis.enabled:true}") boolean redisEnabled) {
         this.jdbc = jdbc;
-        this.redis = redis;
+        this.redis = redisProvider.getIfAvailable();
         this.objectMapper = objectMapper;
+        this.redisEnabled = redisEnabled && this.redis != null;
     }
 
     /** Hash the canonical request body so key reuse with a different body can be detected. */
@@ -117,6 +125,9 @@ public class IdempotencyService {
     }
 
     private void cacheResponse(String key, String requestHash, int code, String body) {
+        if (!redisEnabled) {
+            return;
+        }
         try {
             StoredResponse stored = new StoredResponse(requestHash, code, body);
             redis.opsForValue().set(REDIS_PREFIX + key, objectMapper.writeValueAsString(stored), REDIS_TTL);
@@ -126,6 +137,9 @@ public class IdempotencyService {
     }
 
     private StoredResponse readCache(String key) {
+        if (!redisEnabled) {
+            return null;
+        }
         try {
             String json = redis.opsForValue().get(REDIS_PREFIX + key);
             return json == null ? null : objectMapper.readValue(json, StoredResponse.class);

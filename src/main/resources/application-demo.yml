@@ -1,0 +1,25 @@
+# "demo" profile: runs on PostgreSQL alone (no Kafka, no Redis) so it fits free-tier hosting.
+# The core guarantees (double-entry ledger, idempotency, trades/saga, reconciliation) do NOT
+# depend on Kafka or Redis — those only power the loot stream, outbox relay, and a hot-path cache.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+  datasource:
+    # Prefer a full JDBC URL (SPRING_DATASOURCE_URL); otherwise assemble it from split parts
+    # (DB_HOST/DB_PORT/DB_NAME), which is how managed hosts like Render expose credentials.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:lootledger}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USER:lootledger}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:lootledger}}
+
+server:
+  port: ${PORT:8080}
+
+lootledger:
+  kafka:
+    enabled: false
+  redis:
+    enabled: false
+  loot-generator:
+    enabled: false
