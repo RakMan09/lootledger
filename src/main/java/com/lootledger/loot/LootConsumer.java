@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import org.springframework.stereotype.Component;
  * the same event is a ledger no-op. The offset is acknowledged only after the DB transaction commits.
  */
 @Component
+@ConditionalOnProperty(name = "lootledger.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class LootConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(LootConsumer.class);

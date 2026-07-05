@@ -7,6 +7,8 @@ import com.lootledger.domain.Transfer;
 import com.lootledger.repository.AccountRepository;
 import com.lootledger.repository.PostingRepository;
 import com.lootledger.repository.TransferRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,6 +21,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,33 +39,41 @@ public class LedgerService {
     private final AccountRepository accounts;
     private final TransferRepository transfers;
     private final PostingRepository postings;
+    private final JdbcTemplate jdbc;
 
-    public LedgerService(AccountRepository accounts, TransferRepository transfers, PostingRepository postings) {
+    @PersistenceContext
+    private EntityManager entityManager;
+
+    public LedgerService(
+            AccountRepository accounts,
+            TransferRepository transfers,
+            PostingRepository postings,
+            JdbcTemplate jdbc) {
         this.accounts = accounts;
         this.transfers = transfers;
         this.postings = postings;
+        this.jdbc = jdbc;
     }
 
-    /** Get an account by (owner, asset), creating it if absent. Safe under concurrent creation. */
+    /**
+     * Get an account by (owner, asset), creating it if absent. Uses an idempotent
+     * {@code INSERT ... ON CONFLICT DO NOTHING} so concurrent first-time creation of the same account
+     * neither races nor throws (a caught constraint violation would poison the surrounding
+     * transaction); concurrent inserts simply serialize on the unique index.
+     */
     @Transactional(propagation = Propagation.REQUIRED)
     public Account getOrCreateAccount(long ownerId, String asset, AccountKind kind) {
         Optional<Account> existing = accounts.findByOwnerIdAndAsset(ownerId, asset);
         if (existing.isPresent()) {
             return existing.get();
         }
-        Account account = Account.builder()
-                .ownerId(ownerId)
-                .asset(asset)
-                .kind(kind)
-                .balance(0)
-                .build();
-        try {
-            return accounts.saveAndFlush(account);
-        } catch (DataIntegrityViolationException race) {
-            // Another transaction created it first; re-read.
-            return accounts.findByOwnerIdAndAsset(ownerId, asset)
-                    .orElseThrow(() -> race);
-        }
+        jdbc.update(
+                "INSERT INTO account (owner_id, asset, kind, balance, version) VALUES (?, ?, ?, 0, 0) "
+                        + "ON CONFLICT (owner_id, asset) DO NOTHING",
+                ownerId, asset, kind.name());
+        return accounts.findByOwnerIdAndAsset(ownerId, asset)
+                .orElseThrow(() -> new LedgerException(
+                        "ACCOUNT_CREATE_FAILED", "Could not create account for owner " + ownerId + " asset " + asset));
     }
 
     /**
@@ -82,6 +93,11 @@ public class LedgerService {
         }
 
         validateBalanced(lines);
+
+        // Drop any accounts already loaded (e.g. by getOrCreateAccount) so the locking read below
+        // returns authoritative, freshly-committed state — otherwise balance math could start from a
+        // stale cached copy and lose updates / trigger optimistic-lock failures.
+        entityManager.clear();
 
         // Lock all involved accounts in ascending id order.
         List<Long> ids = lines.stream()

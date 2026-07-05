@@ -1,5 +1,7 @@
 # LootLedger — a dupe-proof MMO / game-economy engine
 
+[![CI](https://github.com/RakMan09/lootledger/actions/workflows/ci.yml/badge.svg)](https://github.com/RakMan09/lootledger/actions/workflows/ci.yml)
+
 LootLedger is the backend economy for a fictional online game. Players hold **gold** and **items**,
 loot drops from monsters, and players trade with each other. The whole point is one guarantee:
 
@@ -13,6 +15,57 @@ atomically with each mutation, the saga pattern with compensation, a transaction
 exactly-once Kafka consumers, and a reconciliation job that proves conservation of value.
 
 This is a headless service plus a load/chaos client — there is no actual game.
+
+## See it work / prove it
+
+Correctness here isn't a claim — it's **self-checking and reproducible**. Three ways to verify:
+
+1. **Automated proof (CI).** Every push runs the anti-dupe attack suite against real Postgres, Kafka
+   and Redis on GitHub's runners. The badge above links to public, clickable logs — look for
+   `concurrentDuplicateStormCreatesExactlyOneTransfer`, `crashBetweenEscrowStepsIsRecoveredToCompletion`,
+   and `redeliveredLootIsAppliedExactlyOnce`.
+2. **Interactive demo.** Run it and open the dashboard at [`http://localhost:8080`](http://localhost:8080):
+   a **"Try to dupe the economy"** button fires a duplicate storm from your browser and shows the gold
+   move *exactly once*. Interactive API docs live at `/swagger-ui.html`; a live invariant check at
+   `/admin/reconciliation`. To publish a public URL, see [`DEPLOY.md`](DEPLOY.md).
+3. **One-command live proof.** With an instance running, `./demo.sh` seeds players, benchmarks
+   throughput/latency, fires a 200-request duplicate storm, and reconciles — printing PASS/FAIL.
+
+```bash
+docker compose -f docker-compose.demo.yml up --build   # app + Postgres only, http://localhost:8080
+```
+
+<details>
+<summary>Sample <code>./demo.sh</code> run (real output)</summary>
+
+```text
+== LootLedger live proof ==
+API: http://localhost:8080
+
+1) Seeding players with gold
+Seeded 20/20 players.
+
+2) Benchmarking transfers (throughput + latency)
+Completed 3000 requests in 3.87s
+Throughput: 774 req/s
+Latency ms  p50=26.5  p95=53.2  p99=1093.2  max=1229.1
+Status codes: {201: 3000}
+
+3) Duplicate storm — firing 200 identical requests with ONE Idempotency-Key
+Responses: 200  2xx=200  fresh(non-replayed)=1
+Receiver balance delta: 100 (expected exactly 100)
+PASS: exactly one transfer applied. No dupes.
+
+4) Reconciliation — proving conservation of value
+{"ok":true,"violations":[]}
+PASS: all invariants hold — value is conserved, nothing duped.
+
+== Demo complete: the economy survived every attack. ==
+```
+
+200 identical requests, one shared Idempotency-Key → **exactly one** executed (`fresh=1`), the
+receiver gained exactly 100 gold, and reconciliation confirms nothing leaked.
+</details>
 
 ## Tech stack
 
@@ -116,6 +169,14 @@ docker compose up -d          # postgres, kafka, redis
 ./gradlew bootRun             # economy API + relay + consumers + reconciliation
 ```
 
+Open the dashboard at [`http://localhost:8080`](http://localhost:8080), or the API docs at
+`/swagger-ui.html`. For a Postgres-only run (no Kafka/Redis), use the `demo` profile:
+
+```bash
+docker compose up -d postgres
+SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun
+```
+
 Then drive it with the chaos/load client:
 
 ```bash
@@ -152,8 +213,14 @@ To enable the demo loot faucet, run with `--args='--lootledger.loot-generator.en
 ```
 lootledger/
   build.gradle, settings.gradle
-  docker-compose.yml
-  src/main/resources/db/migration/     # Flyway V1__schema.sql
+  docker-compose.yml                    # full stack: postgres, kafka, redis
+  docker-compose.demo.yml               # app + postgres only (Postgres-only demo)
+  Dockerfile, render.yaml, DEPLOY.md    # containerize + one-click hosting
+  demo.sh                               # self-verifying live proof script
+  .github/workflows/ci.yml              # runs the attack suite on every push
+  src/main/resources/db/migration/      # Flyway V1__schema.sql
+  src/main/resources/static/index.html  # interactive dashboard ("try to dupe it")
+  src/main/resources/application-demo.yml
   src/main/java/com/lootledger/
     api/            # controllers, DTOs, error handling
     ledger/         # LedgerService (single writer), InvariantChecker

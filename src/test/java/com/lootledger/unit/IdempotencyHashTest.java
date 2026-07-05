@@ -2,14 +2,22 @@ package com.lootledger.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.mockito.Mockito.mock;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootledger.api.dto.TransferRequest;
 import com.lootledger.idempotency.IdempotencyService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 class IdempotencyHashTest {
 
-    private final IdempotencyService service = new IdempotencyService(null, null, new ObjectMapper());
+    @SuppressWarnings("unchecked")
+    private final ObjectProvider<StringRedisTemplate> noRedis = mock(ObjectProvider.class);
+
+    private final IdempotencyService service =
+            new IdempotencyService(null, noRedis, new ObjectMapper(), false);
 
     @Test
     void identicalRequestsHashEqual() {

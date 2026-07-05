@@ -37,7 +37,17 @@ spring:
     listener:
       ack-mode: manual
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
 lootledger:
+  kafka:
+    enabled: true
+  redis:
+    enabled: true
   topics:
     loot: loot-events
     economy: economy-events

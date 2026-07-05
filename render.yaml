@@ -1,0 +1,38 @@
+# Render.com blueprint: one managed Postgres + the LootLedger web service (Docker).
+# Deploy: push to GitHub, then in Render choose "New > Blueprint" and pick this repo.
+services:
+  - type: web
+    name: lootledger
+    runtime: docker
+    plan: free
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: demo
+      - key: DB_HOST
+        fromDatabase:
+          name: lootledger-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: lootledger-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: lootledger-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: lootledger-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: lootledger-db
+          property: password
+
+databases:
+  - name: lootledger-db
+    plan: free
+    databaseName: lootledger
+    user: lootledger
