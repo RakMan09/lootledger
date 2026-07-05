@@ -14,7 +14,61 @@ correctness techniques payment systems rely on: double-entry accounting, idempot
 atomically with each mutation, the saga pattern with compensation, a transactional outbox,
 exactly-once Kafka consumers, and a reconciliation job that proves conservation of value.
 
-This is a headless service plus a load/chaos client — there is no actual game.
+This is a headless service plus a load/chaos client — there is no actual game. In banking terms it's
+a tiny, correct-by-construction bank: players are account holders, gold and items are balances, and
+loot/trades are transactions that must always balance.
+
+**Live demo:** https://rakman09.github.io/lootledger/
+
+## Contents
+
+- [The live demo site](#the-live-demo-site)
+- [See it work / prove it](#see-it-work--prove-it)
+- [Tech stack](#tech-stack)
+- [Architecture](#architecture)
+- [Data model & invariants](#data-model--invariants)
+- [Why it can't dupe (the hard parts)](#why-it-cant-dupe-the-hard-parts)
+- [API](#api)
+- [How to run](#how-to-run)
+- [Testing](#testing)
+- [Metrics & benchmarking](#metrics--benchmarking)
+- [Repo structure](#repo-structure)
+
+## The live demo site
+
+There is a live, zero-install page anyone can open in a browser:
+
+### https://rakman09.github.io/lootledger/
+
+It lets you *play with the economy and try to break it* right from the page — nothing to download.
+
+**What it is (and an honest note).** GitHub Pages can only serve static files, so it can't run the real
+Java/PostgreSQL service. The site therefore runs a **faithful client-side simulation** of LootLedger's
+actual ledger + idempotency logic in JavaScript — same rules, same outcomes — purely so it's instantly
+approachable. The *real* system is the Spring Boot backend in this repo, and its correctness is proven
+by an automated attack suite that runs on real Postgres/Kafka/Redis in CI (the badge at the top links
+to the live logs). The page says this clearly and links back to the real proof.
+
+**What you can do on the site:**
+
+- **Try to dupe the economy** — the headline. Pick a number of *identical* requests (say 200) that
+  all share one Idempotency-Key — exactly what a laggy client or a double-click does — and fire them.
+  You'll see them collapse to **exactly one** executed transfer, the receiver credited once, and the
+  rest deduplicated. This is the whole promise, made tangible.
+- **Playground** — mint gold from the faucet, transfer gold between players, and inspect balances.
+- **The auditor** — recompute every balance from the immutable posting log and check the four
+  invariants (balanced, cache matches ledger, no illegal negatives, conservation of value).
+- **Live metrics** — running counters for your session (transfers, duplicates prevented, mints,
+  overdrafts rejected).
+- **Architecture diagram** plus links to the source, CI, and deployment guide.
+
+**The same thing, for real.** Every panel above also exists on the *real* dashboard served by the
+backend at [`http://localhost:8080`](http://localhost:8080) when you run it — there the buttons hit the
+actual Java/Postgres API. You also get interactive API docs at `/swagger-ui.html`, a live invariant
+check at `/admin/reconciliation`, and JSON metrics at `/admin/metrics`. To publish your own public URL
+for the real backend, see [`DEPLOY.md`](DEPLOY.md).
+
+> Enabling the site (repo owner, one-time): **Settings → Pages → Deploy from a branch → `main` / `docs`**.
 
 ## See it work / prove it
 
@@ -24,16 +78,11 @@ Correctness here isn't a claim — it's **self-checking and reproducible**. Thre
    and Redis on GitHub's runners. The badge above links to public, clickable logs — look for
    `concurrentDuplicateStormCreatesExactlyOneTransfer`, `crashBetweenEscrowStepsIsRecoveredToCompletion`,
    and `redeliveredLootIsAppliedExactlyOnce`.
-2. **Interactive demo.** Two ways:
-   - **Zero-setup (GitHub Pages):** an in-browser demo at
-     **https://rakman09.github.io/lootledger/** — a faithful client-side *simulation* of the ledger +
-     idempotency logic with the same **"Try to dupe the economy"** button, so anyone can play instantly
-     with nothing to install. (It's a simulation for approachability; the real system is proven by the
-     CI tests above.) Enable it once via **Settings → Pages → Deploy from branch → `main` / `docs`**.
-   - **The real backend:** run it and open the dashboard at
-     [`http://localhost:8080`](http://localhost:8080) — same button, but hitting the actual
-     Java/Postgres service. Interactive API docs at `/swagger-ui.html`; live invariant check at
-     `/admin/reconciliation`. To publish a public URL, see [`DEPLOY.md`](DEPLOY.md).
+2. **Interactive demo.** Play with it yourself — either the zero-install
+   [live site](#the-live-demo-site) (browser simulation) or the **real backend** dashboard at
+   [`http://localhost:8080`](http://localhost:8080) when you run it locally (same UI, hitting the actual
+   Java/Postgres API, with Swagger at `/swagger-ui.html` and a live invariant check at
+   `/admin/reconciliation`).
 3. **One-command live proof.** With an instance running, `./demo.sh` seeds players, benchmarks
    throughput/latency, fires a 200-request duplicate storm, and reconciles — printing PASS/FAIL.
 
