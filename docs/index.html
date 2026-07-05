@@ -147,6 +147,19 @@
     </section>
   </div>
 
+  <!-- Live metrics (client-side simulation counters) -->
+  <section class="card">
+    <h2>📊 Live metrics</h2>
+    <div class="sub">Counters from your session in this simulation. The real backend exposes the same
+      metrics via Micrometer/Prometheus (<code>/actuator/prometheus</code>, <code>/admin/metrics</code>).</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="num gold" id="mTransfers">0</div><div class="lbl">Transfers executed</div></div>
+      <div class="stat"><div class="num good" id="mDupes">0</div><div class="lbl">Duplicates prevented</div></div>
+      <div class="stat"><div class="num" id="mMints">0</div><div class="lbl">Mints</div></div>
+      <div class="stat"><div class="num" id="mOverdraft">0</div><div class="lbl">Overdrafts rejected</div></div>
+    </div>
+  </section>
+
   <!-- How it works -->
   <section class="card">
     <h2>🛡️ Why it can't dupe</h2>
@@ -196,6 +209,7 @@ flowchart TD
   const accounts = new Map();   // "owner:asset" -> { balance, kind }
   const idem = new Map();       // idempotency key -> { hash, response }
   const postings = [];          // immutable log of { acct, asset, amount }
+  const sim = { transfers: 0, mints: 0, duplicatesPrevented: 0, overdrafts: 0 };
 
   const akey = (owner, asset) => owner + ':' + asset;
   const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
@@ -234,6 +248,7 @@ flowchart TD
     const existing = idem.get(key);
     if (existing) {
       if (existing.hash !== h) return { status: 422, replayed: true, error: 'IDEMPOTENCY_KEY_REUSED' };
+      sim.duplicatesPrevented++;
       return Object.assign({}, existing.response, { replayed: true });
     }
     let res;
@@ -241,6 +256,7 @@ flowchart TD
       res = execFn();
     } catch (e) {
       // Deterministic rejection: not stored, so it stays retryable (mirrors the real rollback).
+      if (e.code === 'INSUFFICIENT_FUNDS') sim.overdrafts++;
       return { status: 422, replayed: false, error: e.code || e.message };
     }
     idem.set(key, { hash: h, response: res });
@@ -252,6 +268,7 @@ flowchart TD
       ensureAccount(0, asset, 'FAUCET');
       ensureAccount(to, asset, 'PLAYER');
       applyPostings([[0, asset, -amount, 'FAUCET'], [to, asset, amount, 'PLAYER']]);
+      sim.mints++;
       return { status: 201 };
     });
   }
@@ -260,6 +277,7 @@ flowchart TD
       ensureAccount(from, asset, 'PLAYER');
       ensureAccount(to, asset, 'PLAYER');
       applyPostings([[from, asset, -amount, 'PLAYER'], [to, asset, amount, 'PLAYER']]);
+      sim.transfers++;
       return { status: 201 };
     });
   }
@@ -343,6 +361,13 @@ flowchart TD
     const rows = Object.entries(totals).map(([a, t]) =>
       '<div class="bal-row"><span class="asset">' + a + ' (all accounts)</span><strong>' + t + '</strong></div>');
     el.innerHTML = rows.length ? rows.join('') : '<div class="bal-row"><span class="asset">no activity yet</span></div>';
+    renderMetrics();
+  }
+  function renderMetrics() {
+    document.getElementById('mTransfers').textContent = sim.transfers;
+    document.getElementById('mDupes').textContent = sim.duplicatesPrevented;
+    document.getElementById('mMints').textContent = sim.mints;
+    document.getElementById('mOverdraft').textContent = sim.overdrafts;
   }
   function reconcile() {
     const v = document.getElementById('reconVerdict');

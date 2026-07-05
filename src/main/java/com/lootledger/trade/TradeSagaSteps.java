@@ -10,6 +10,7 @@ import com.lootledger.domain.TradeSagaState;
 import com.lootledger.economy.SystemAccounts;
 import com.lootledger.ledger.LedgerService;
 import com.lootledger.ledger.PostingLine;
+import com.lootledger.metrics.EconomyMetrics;
 import com.lootledger.outbox.OutboxService;
 import com.lootledger.repository.TradeSagaRepository;
 import java.nio.charset.StandardCharsets;
@@ -34,16 +35,19 @@ public class TradeSagaSteps {
     private final TradeSagaRepository sagas;
     private final OutboxService outbox;
     private final ObjectMapper objectMapper;
+    private final EconomyMetrics metrics;
 
     public TradeSagaSteps(
             LedgerService ledger,
             TradeSagaRepository sagas,
             OutboxService outbox,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            EconomyMetrics metrics) {
         this.ledger = ledger;
         this.sagas = sagas;
         this.outbox = outbox;
         this.objectMapper = objectMapper;
+        this.metrics = metrics;
     }
 
     private TradeSaga getRequired(long sagaId) {
@@ -89,6 +93,7 @@ public class TradeSagaSteps {
         outbox.enqueue("trade", "TradeCompleted", Map.of(
                 "externalId", saga.getExternalId().toString(),
                 "state", TradeSagaState.COMPLETED.name()));
+        metrics.recordTradeCompleted();
     }
 
     /** Release party A's escrow back (only A was escrowed when we compensate). */
@@ -102,6 +107,7 @@ public class TradeSagaSteps {
         outbox.enqueue("trade", "TradeCompensated", Map.of(
                 "externalId", saga.getExternalId().toString(),
                 "state", TradeSagaState.COMPENSATED.name()));
+        metrics.recordTradeCompensated();
     }
 
     @Transactional(propagation = Propagation.REQUIRED)

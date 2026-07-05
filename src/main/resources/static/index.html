@@ -170,6 +170,26 @@
     <div class="balances" id="balances"></div>
   </section>
 
+  <!-- Live metrics -->
+  <section class="card">
+    <h2>📊 Live metrics</h2>
+    <div class="sub">
+      Real server-side numbers (Micrometer). Full Prometheus scrape at
+      <a href="/actuator/prometheus" target="_blank">/actuator/prometheus</a>,
+      JSON at <a href="/admin/metrics" target="_blank">/admin/metrics</a>.
+    </div>
+    <div class="stat-grid" id="metricGrid">
+      <div class="stat"><div class="num gold" id="mTransfers">–</div><div class="lbl">Transfers posted</div></div>
+      <div class="stat"><div class="num good" id="mDupes">–</div><div class="lbl">Duplicates prevented</div></div>
+      <div class="stat"><div class="num" id="mP95">–</div><div class="lbl">Transfer p95 (ms)</div></div>
+      <div class="stat"><div class="num" id="mP99">–</div><div class="lbl">Transfer p99 (ms)</div></div>
+      <div class="stat"><div class="num" id="mTrades">–</div><div class="lbl">Trades completed</div></div>
+      <div class="stat"><div class="num" id="mComp">–</div><div class="lbl">Trades compensated</div></div>
+      <div class="stat"><div class="num" id="mOverdraft">–</div><div class="lbl">Overdrafts rejected</div></div>
+      <div class="stat"><div class="num gold" id="mGold">–</div><div class="lbl">Gold minted</div></div>
+    </div>
+  </section>
+
   <!-- Auditor -->
   <section class="card">
     <h2>🧮 The auditor</h2>
@@ -319,8 +339,25 @@
     }
   }
 
-  // Prime the playground view.
+  async function refreshMetrics() {
+    try {
+      const m = await (await fetch('/admin/metrics')).json();
+      const set = (id, v) => { document.getElementById(id).textContent = v; };
+      set('mTransfers', m.transfers);
+      set('mDupes', m.duplicatesPrevented);
+      set('mP95', (m.transferLatency && m.transferLatency.p95Ms != null) ? m.transferLatency.p95Ms : '–');
+      set('mP99', (m.transferLatency && m.transferLatency.p99Ms != null) ? m.transferLatency.p99Ms : '–');
+      set('mTrades', m.tradesCompleted);
+      set('mComp', m.tradesCompensated);
+      set('mOverdraft', m.overdraftsRejected);
+      set('mGold', m.goldMinted);
+    } catch (e) { /* ignore */ }
+  }
+
+  // Prime the playground view and start polling metrics.
   lookup();
+  refreshMetrics();
+  setInterval(refreshMetrics, 3000);
 </script>
 </body>
 </html>

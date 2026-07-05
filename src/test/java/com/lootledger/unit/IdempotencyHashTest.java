@@ -7,6 +7,8 @@ import static org.mockito.Mockito.mock;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootledger.api.dto.TransferRequest;
 import com.lootledger.idempotency.IdempotencyService;
+import com.lootledger.metrics.EconomyMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -17,7 +19,8 @@ class IdempotencyHashTest {
     private final ObjectProvider<StringRedisTemplate> noRedis = mock(ObjectProvider.class);
 
     private final IdempotencyService service =
-            new IdempotencyService(null, noRedis, new ObjectMapper(), false);
+            new IdempotencyService(null, noRedis, new ObjectMapper(), false,
+                    new EconomyMetrics(new SimpleMeterRegistry()));
 
     @Test
     void identicalRequestsHashEqual() {

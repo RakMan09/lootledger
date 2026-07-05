@@ -214,6 +214,38 @@ To enable the demo loot faucet, run with `--args='--lootledger.loot-generator.en
 > Running the Testcontainers suite against a very new Docker Engine (API ≥ 1.44) may require
 > `DOCKER_API_VERSION=1.44`, and a sandbox without overlay support may need the `vfs` storage driver.
 
+## Metrics & benchmarking
+
+Quantifiable numbers are exposed server-side via Micrometer and summarized for the dashboard.
+
+- **Prometheus scrape:** `GET /actuator/prometheus` — includes per-endpoint request latency with
+  `p50/p95/p99` histograms (`http.server.requests`) plus the custom meters below.
+- **Friendly JSON summary:** `GET /admin/metrics` — powers the dashboard's live tiles.
+
+| Metric | Meaning |
+| --- | --- |
+| `lootledger.transfers.total` | transfers posted (throughput = rate of this counter) |
+| `lootledger.transfer.latency` | transfer processing timer with `p50/p95/p99` |
+| `lootledger.idempotency.replayed` | **duplicate requests deduplicated (dupes prevented)** |
+| `lootledger.idempotency.executed` | first-time executions |
+| `lootledger.trades.completed` / `.compensated` | trade outcomes |
+| `lootledger.overdrafts.rejected` | transfers blocked for insufficient funds |
+| `lootledger.invariant.violations` | reconciliation drift gauge (should stay `0`) |
+
+Reproduce a benchmark any time with the load client (measured locally on the Postgres-only demo):
+
+```text
+$ python load/players.py load --players 20 --requests 3000 --concurrency 32
+Completed 3000 requests in 3.87s
+Throughput: 774 req/s
+Latency ms  p50=26.5  p95=53.2  p99=1093.2  max=1229.1
+Status codes: {201: 3000}
+```
+
+Headline correctness numbers (from the test suite + `demo.sh`):
+**200 concurrent duplicate requests → exactly 1 transfer applied; 0 double-spends; reconciliation
+`violations = 0`** after every run.
+
 ## Repo structure
 
 ```
