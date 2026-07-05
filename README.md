@@ -24,10 +24,16 @@ Correctness here isn't a claim — it's **self-checking and reproducible**. Thre
    and Redis on GitHub's runners. The badge above links to public, clickable logs — look for
    `concurrentDuplicateStormCreatesExactlyOneTransfer`, `crashBetweenEscrowStepsIsRecoveredToCompletion`,
    and `redeliveredLootIsAppliedExactlyOnce`.
-2. **Interactive demo.** Run it and open the dashboard at [`http://localhost:8080`](http://localhost:8080):
-   a **"Try to dupe the economy"** button fires a duplicate storm from your browser and shows the gold
-   move *exactly once*. Interactive API docs live at `/swagger-ui.html`; a live invariant check at
-   `/admin/reconciliation`. To publish a public URL, see [`DEPLOY.md`](DEPLOY.md).
+2. **Interactive demo.** Two ways:
+   - **Zero-setup (GitHub Pages):** an in-browser demo at
+     **https://rakman09.github.io/lootledger/** — a faithful client-side *simulation* of the ledger +
+     idempotency logic with the same **"Try to dupe the economy"** button, so anyone can play instantly
+     with nothing to install. (It's a simulation for approachability; the real system is proven by the
+     CI tests above.) Enable it once via **Settings → Pages → Deploy from branch → `main` / `docs`**.
+   - **The real backend:** run it and open the dashboard at
+     [`http://localhost:8080`](http://localhost:8080) — same button, but hitting the actual
+     Java/Postgres service. Interactive API docs at `/swagger-ui.html`; live invariant check at
+     `/admin/reconciliation`. To publish a public URL, see [`DEPLOY.md`](DEPLOY.md).
 3. **One-command live proof.** With an instance running, `./demo.sh` seeds players, benchmarks
    throughput/latency, fires a 200-request duplicate storm, and reconciles — printing PASS/FAIL.
 
@@ -219,6 +225,7 @@ lootledger/
   demo.sh                               # self-verifying live proof script
   .github/workflows/ci.yml              # runs the attack suite on every push
   src/main/resources/db/migration/      # Flyway V1__schema.sql
+  docs/index.html                       # GitHub Pages: in-browser dupe-proof simulation
   src/main/resources/static/index.html  # interactive dashboard ("try to dupe it")
   src/main/resources/application-demo.yml
   src/main/java/com/lootledger/
