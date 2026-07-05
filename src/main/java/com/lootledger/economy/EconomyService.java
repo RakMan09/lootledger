@@ -5,6 +5,7 @@ import com.lootledger.domain.AccountKind;
 import com.lootledger.domain.Transfer;
 import com.lootledger.ledger.LedgerService;
 import com.lootledger.ledger.PostingLine;
+import com.lootledger.metrics.EconomyMetrics;
 import com.lootledger.outbox.OutboxService;
 import java.util.List;
 import java.util.Map;
@@ -22,16 +23,19 @@ public class EconomyService {
 
     private final LedgerService ledger;
     private final OutboxService outbox;
+    private final EconomyMetrics metrics;
 
-    public EconomyService(LedgerService ledger, OutboxService outbox) {
+    public EconomyService(LedgerService ledger, OutboxService outbox, EconomyMetrics metrics) {
         this.ledger = ledger;
         this.outbox = outbox;
+        this.metrics = metrics;
     }
 
     /** Move an asset between two players. Debits the sender, credits the receiver. */
     @Transactional(propagation = Propagation.REQUIRED)
     public Transfer transfer(UUID externalId, long fromOwner, long toOwner, String asset, long amount) {
         requirePositive(amount);
+        long start = System.nanoTime();
         Account from = ledger.getOrCreateAccount(fromOwner, asset, AccountKind.PLAYER);
         Account to = ledger.getOrCreateAccount(toOwner, asset, AccountKind.PLAYER);
         Transfer transfer = ledger.post(externalId, "TRANSFER", List.of(
@@ -44,6 +48,8 @@ public class EconomyService {
                 "toOwner", toOwner,
                 "asset", asset,
                 "amount", amount));
+        metrics.transferLatencyTimer().record(System.nanoTime() - start, java.util.concurrent.TimeUnit.NANOSECONDS);
+        metrics.recordTransfer();
         return transfer;
     }
 
@@ -62,6 +68,7 @@ public class EconomyService {
                 "toOwner", toOwner,
                 "asset", asset,
                 "amount", amount));
+        metrics.recordMint();
         return transfer;
     }
 

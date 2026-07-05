@@ -2,6 +2,7 @@ package com.lootledger.api;
 
 import com.lootledger.idempotency.IdempotencyExceptions;
 import com.lootledger.ledger.LedgerException;
+import com.lootledger.metrics.EconomyMetrics;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -14,8 +15,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private final EconomyMetrics metrics;
+
+    public GlobalExceptionHandler(EconomyMetrics metrics) {
+        this.metrics = metrics;
+    }
+
     @ExceptionHandler(LedgerException.class)
     public ResponseEntity<ApiError> handleLedger(LedgerException e) {
+        if ("INSUFFICIENT_FUNDS".equals(e.getCode())) {
+            metrics.recordOverdraftRejected();
+        }
         return ResponseEntity.unprocessableEntity().body(ApiError.of(e.getCode(), e.getMessage()));
     }
 

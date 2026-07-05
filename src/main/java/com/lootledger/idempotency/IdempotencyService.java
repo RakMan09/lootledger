@@ -2,6 +2,7 @@ package com.lootledger.idempotency;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lootledger.domain.IdempotencyStatus;
+import com.lootledger.metrics.EconomyMetrics;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.HexFormat;
@@ -38,16 +39,19 @@ public class IdempotencyService {
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
     private final boolean redisEnabled;
+    private final EconomyMetrics metrics;
 
     public IdempotencyService(
             JdbcTemplate jdbc,
             ObjectProvider<StringRedisTemplate> redisProvider,
             ObjectMapper objectMapper,
-            @Value("${lootledger.redis.enabled:true}") boolean redisEnabled) {
+            @Value("${lootledger.redis.enabled:true}") boolean redisEnabled,
+            EconomyMetrics metrics) {
         this.jdbc = jdbc;
         this.redis = redisProvider.getIfAvailable();
         this.objectMapper = objectMapper;
         this.redisEnabled = redisEnabled && this.redis != null;
+        this.metrics = metrics;
     }
 
     /** Hash the canonical request body so key reuse with a different body can be detected. */
@@ -72,6 +76,7 @@ public class IdempotencyService {
         StoredResponse fromCache = readCache(key);
         if (fromCache != null && fromCache.requestHash().equals(requestHash)) {
             log.debug("Idempotency replay from Redis for key {}", key);
+            metrics.recordIdempotentReplay();
             return new IdempotencyResult(fromCache.code(), fromCache.body(), true);
         }
 
@@ -89,6 +94,7 @@ public class IdempotencyService {
                             + "response_body = ?::jsonb, transfer_id = ? WHERE key = ?",
                     IdempotencyStatus.SUCCEEDED.name(), result.httpStatus(), body, result.transferId(), key);
             cacheResponse(key, requestHash, result.httpStatus(), body);
+            metrics.recordIdempotentExecution();
             log.info("Idempotency key {} executed and committed (status {})", key, result.httpStatus());
             return new IdempotencyResult(result.httpStatus(), body, false);
         }
@@ -116,6 +122,7 @@ public class IdempotencyService {
             Integer code = (Integer) row.get("response_code");
             String body = (String) row.get("response_body");
             cacheResponse(key, requestHash, code, body);
+            metrics.recordIdempotentReplay();
             log.debug("Idempotency replay from Postgres for key {} (status {})", key, status);
             return new IdempotencyResult(code, body, true);
         }
